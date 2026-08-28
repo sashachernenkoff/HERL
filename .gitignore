@@ -1,0 +1,123 @@
+# ---- OS junk ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ---- IDE / editor ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# Testing / coverage / type checkers
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# ---- R ----
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj
+
+# ---- TensorFlow / Keras / ML artifacts ----
+*.h5
+*.keras
+*.hdf5
+*.ckpt
+*.pb
+*.pt
+*.pth
+*.onnx
+*.tflite
+saved_model/
+checkpoint
+*.index
+*.data-[0-9]*-of-[0-9]*
+# Keras Tuner search state
+tuner_*/
+*_optimization/
+
+# ---- Genetics / bioinformatics data ----
+*.bed
+*.bim
+*.fam
+*.grm
+*.grm.*
+*.phen
+*.raw
+*.vcf
+*.vcf.gz
+*.bgen
+*.top
+
+# ---- Large data & numeric arrays ----
+*.npy
+*.npz
+*.parquet
+*.feather
+*.bin
+
+# ---- Project data & outputs ----
+data/
+out/
+outputs/
+results/
+logs/
+*.log
+
+# SLURM job scripts (cluster-specific, not published) and logs
+slurm/
+slurm-*.out
+*.err
+
+# ---- Assets ----
+# Exclude everything in assets/ except the four figures embedded in the README.
+assets/*
+!assets/fig1.png
+!assets/VAE.drawio.png
+!assets/vae_heatmap.png
+!assets/vae_reconstructed_heatmap.png
+
+# ---- Notes ----
+# Cluster job scripts (slurm/) are intentionally excluded — sync separately via rsync/scp.
+# Generated model checkpoints, tuner state, and CSV/data outputs are ignored above.
