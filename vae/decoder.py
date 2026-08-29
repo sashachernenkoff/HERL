@@ -10,11 +10,9 @@ class Decoder(nn.Module):
             nn.Linear(latent_input_dim, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Linear(256, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Linear(512, self.output_dim * 3)
         )
         

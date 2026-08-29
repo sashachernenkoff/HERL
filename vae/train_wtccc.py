@@ -151,8 +151,10 @@ def train_vae(model, train_data, test_data, training, device, pruned=False):
             best_val_loss = val_loss
             best_model_weights = copy.deepcopy(model.state_dict())
 
-    model.load_state_dict(best_model_weights)
-    return history
+    # Keep the latest (final-epoch) weights on the model so the saved model and
+    # extracted mu reflect the fully-trained state after KL has converged. The
+    # best-val-loss weights are returned separately and saved alongside.
+    return history, best_model_weights
 
 
 
@@ -184,7 +186,7 @@ def plot_history(history, label, output_dir):
 def main(config_path, disease, data_path, output_dir, pruned=False, batch_size=None, accumulation_steps=1):
     if pruned:
         output_dir = f"{output_dir}_pruned"
-    
+
     os.makedirs(output_dir, exist_ok=True)
 
     with open(config_path) as f:
@@ -234,12 +236,13 @@ def main(config_path, disease, data_path, output_dir, pruned=False, batch_size=N
     
     vae = VAE(data.shape[1], config)
     print("Starting training loop...")
-    history = train_vae(vae, train_data, val_data, config["training"], device, pruned=pruned)
+    history, best_weights = train_vae(vae, train_data, val_data, config["training"], device, pruned=pruned)
     
     # --- Stage 4: Outputs and Evaluation ---
     print(f"\n--- Stage 4: Outputs and Evaluation ---")
-    print("Saving model weights...")
+    print("Saving model weights (latest + best-val-loss)...")
     vae.save(os.path.join(output_dir, f'{disease}_vae.pt'))
+    torch.save(best_weights, os.path.join(output_dir, f'{disease}_vae_best.pt'))
 
     print("Evaluating model on Test Set...")
     vae.eval()

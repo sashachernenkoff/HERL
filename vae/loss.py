@@ -5,7 +5,7 @@ def compute_loss(x, reconstructed, mu, log_var):
     """
     Computes the pure VAE Evidence Lower Bound (ELBO) Loss.
     No scaling factors or betas are applied.
-    
+
     x: (batch, num_snps)
     reconstructed: (batch, num_snps, 3) logits
     mu, log_var: (batch, latent_dim)
@@ -25,5 +25,5 @@ def compute_loss(x, reconstructed, mu, log_var):
     
     # Pure ELBO (No Beta)
     total_loss = recon_loss + kl_loss
-    
+
     return total_loss, recon_loss, kl_loss
