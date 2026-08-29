@@ -162,7 +162,6 @@ python vae/train_wtccc.py \
 # 2. Build the GRM (from the latents) + phenotype + GCTA binaries
 python heritability/grm_wtccc.py \
     --disease BD \
-    --data_path /work/long_lab/for_Ariel/BD \
     --output_dir /work/long_lab/sasha/heritability/out/WTCCC/BD/BD_128
 
 # 3. Estimate heritability with GCTA (external tool)
@@ -173,7 +172,8 @@ gcta64 --reml \
 ```
 
 Each training run writes, into `--output_dir`, the latent means 
-(`{disease}_latent_representations.csv`), the expected-dosage reconstructions 
+(`{disease}_latent_representations.csv`, with a leading `IID` column so downstream 
+GRM/phenotype construction joins individuals by ID), the expected-dosage reconstructions 
 (`{disease}_reconstructed_data.csv`), and the model weights - both the 
 final-epoch (`{disease}_vae.pt`) and best-validation-loss (`{disease}_vae_best.pt`) 
 checkpoints.

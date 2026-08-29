@@ -202,7 +202,7 @@ def main(config_path, disease, data_path, output_dir, pruned=False, batch_size=N
     # --- Stage 1: Data Loading ---
     print(f"--- Stage 1: Data Loading ---")
     print(f"Loading raw data prefix from {data_path}...")
-    data = load_wtccc_data(data_path, disease, prune=pruned)
+    data, ids = load_wtccc_data(data_path, disease, prune=pruned)
     print(f"Data loaded successfully. Shape: {data.shape}")
 
     # Write dims to JSON 
@@ -303,7 +303,12 @@ def main(config_path, disease, data_path, output_dir, pruned=False, batch_size=N
     reconstructed_full = torch.cat(all_reconstructed, dim=0).numpy()
 
     print("Saving representations to CSV...")
-    pd.DataFrame(mu_full).to_csv(
+    assert len(ids) == len(mu_full), (
+        f"ID/latent row mismatch: {len(ids)} IDs vs {len(mu_full)} latent rows"
+    )
+    latent_df = pd.DataFrame(mu_full)
+    latent_df.insert(0, "IID", ids["IID"].to_numpy())
+    latent_df.to_csv(
         os.path.join(output_dir, f'{disease}_latent_representations.csv'), index=False)
     
     pd.DataFrame(reconstructed_full).to_csv(

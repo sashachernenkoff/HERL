@@ -1,17 +1,22 @@
 """
 Build phenotype files, GRM, and GCTA binaries from WTCCC VAE latent representations.
 
-Reads the latent means written by vae/train_wtccc.py, standardizes each latent
-dimension (column) to mean 0 / unit variance, computes the genetic relationship
-matrix (GRM = (1/d) * Z @ Z.T, d = number of latent dimensions), serializes it
-to GCTA binary format (.grm.bin, .grm.N.bin, .grm.id), and writes a case/control
-phenotype file (.phen). The output directory is ready for gcta.py or a direct
-GCTA --reml call.
+Reads the latent means written by vae/train_wtccc.py -- a CSV whose first column
+is the individual IID followed by the latent dimensions -- standardizes each
+latent dimension (column) to mean 0 / unit variance, computes the genetic
+relationship matrix (GRM = (1/d) * Z @ Z.T, d = number of latent dimensions),
+serializes it to GCTA binary format (.grm.bin, .grm.N.bin, .grm.id), and writes
+a case/control phenotype file (.phen). The output directory is ready for gcta.py
+or a direct GCTA --reml call.
+
+Because the IID travels in the latent CSV, the phenotype and .grm.id join to the
+GRM rows by ID (not row position). Case/control status is inferred from the ID
+prefix: IIDs starting with the disease name are cases, shared controls (e.g. 58C,
+NBS) are controls. In WTCCC the FID and IID are identical.
 
 Example usage:
     python heritability/grm_wtccc.py --disease BD \\
-        --data_path /path/to/wtccc/wtccc.geno.BD.csv \\
-        --output_dir /path/to/output/WTCCC/BD/BD_200
+        --output_dir /path/to/output/WTCCC/BD/BD_128
 """
 
 import argparse
@@ -21,25 +26,40 @@ import numpy as np
 import pandas as pd
 
 
-def make_phenotype_file(disease, output_dir):
-    """Write a GCTA-format phenotype file for case/control status.
+def load_latents(output_dir, disease):
+    """Load the latent CSV, returning (iid Series, mu array).
 
-    Individual IDs are read from the original RAW genotype CSV header, because
-    the prepped filtered CSVs do not retain the individual IDs.
+    The CSV is written by vae/train_wtccc.py with an 'IID' first column followed
+    by the latent dimensions, so individuals stay joined to the GRM rows by ID.
+    """
+    path = os.path.join(output_dir, f"{disease}_latent_representations.csv")
+    df = pd.read_csv(path)
+    if "IID" not in df.columns:
+        raise ValueError(
+            f"{path} has no 'IID' column. Re-run vae/train_wtccc.py to embed IDs."
+        )
+    iid = df["IID"].astype(str)
+    mu = df.drop(columns=["IID"]).to_numpy(dtype=np.float64)
+    return iid, mu
+
+
+def make_phenotype_file(disease, output_dir, iid):
+    """Write a GCTA-format .phen (FID, IID, case/control) in latent row order.
+
+    Case/control is inferred from the ID prefix: IIDs starting with the disease
+    name are cases (1); shared controls (e.g. 58C, NBS) are 0. WTCCC FID == IID.
     """
     print("Writing phenotype file...")
-    # The raw files have CHR, LOC, and then the individual IDs as column headers
-    raw_path = f"/work/long_lab/GROUP_DATA/Genomes/Human_GWAS/WTCCC_data/wtccc.geno.{disease}.csv"
-    col_names = pd.read_csv(raw_path, nrows=0).columns.tolist()
-    col_names = col_names[2:]  # drop 'CHR' and 'LOC'
-
-    data = pd.DataFrame(col_names, columns=['FID'])
-    data['IID'] = data['FID']
-    data['Phenotype'] = data['FID'].apply(lambda x: 1 if x.startswith(disease) else 0)
+    data = pd.DataFrame({"FID": iid, "IID": iid})
+    data["Phenotype"] = data["IID"].str.startswith(disease).astype(int)
 
     os.makedirs(output_dir, exist_ok=True)
-    pheno_path = os.path.join(output_dir, f'{disease}.phen')
-    data.to_csv(pheno_path, sep='\t', index=False, header=False)
+    pheno_path = os.path.join(output_dir, f"{disease}.phen")
+    data.to_csv(pheno_path, sep="\t", index=False, header=False)
+
+    n_case = int(data["Phenotype"].sum())
+    print(f"Wrote {pheno_path}: {len(data)} individuals "
+          f"({n_case} cases, {len(data) - n_case} controls)")
     return pheno_path
 
 
@@ -60,50 +80,47 @@ def calculate_grm(E):
     return (1.0 / d) * Z @ Z.T
 
 
-def make_grm_and_binaries(disease, pheno_path, output_dir):
-    """Load latent means, compute GRM, and serialize directly to GCTA binary format."""
-    print("Loading latent representations...")
-    mu = pd.read_csv(os.path.join(output_dir, f'{disease}_latent_representations.csv')).to_numpy()
-    
+def make_grm_and_binaries(disease, output_dir, iid, mu):
+    """Compute the GRM and serialize to GCTA binary format.
+
+    The .grm.id is written from the same IID column, so it stays aligned with
+    both the GRM matrix rows and the phenotype file.
+    """
     print("Computing GRM...")
     grm = calculate_grm(mu)
-    
-    phen = pd.read_csv(pheno_path, header=None, sep='\t')
-
-    assert len(grm) == len(phen), (
-        f'Mismatch between GRM rows ({len(grm)}) and phen file rows ({len(phen)}).'
-    )
 
     print("Writing GCTA .grm.id file...")
-    with open(os.path.join(output_dir, f'{disease}.grm.id'), 'w') as f:
-        for iid in phen[1]:
-            f.write(f'{iid}\t{iid}\n')
+    with open(os.path.join(output_dir, f"{disease}.grm.id"), "w") as f:
+        for x in iid:
+            f.write(f"{x}\t{x}\n")
 
     print("Extracting lower triangle and writing GCTA binaries...")
     i_indices, j_indices = np.tril_indices(grm.shape[0])
     lower_tri_grm = grm[i_indices, j_indices].astype(np.float32)
-    
-    with open(os.path.join(output_dir, f'{disease}.grm.bin'), 'wb') as f:
+
+    with open(os.path.join(output_dir, f"{disease}.grm.bin"), "wb") as f:
         f.write(lower_tri_grm.tobytes())
-        
+
     n_arr = np.ones(len(lower_tri_grm), dtype=np.int32)
-    with open(os.path.join(output_dir, f'{disease}.grm.N.bin'), 'wb') as f:
+    with open(os.path.join(output_dir, f"{disease}.grm.N.bin"), "wb") as f:
         f.write(n_arr.tobytes())
-        
+
     print("Done!")
 
 
-def main(disease, data_path, output_dir):
-    pheno_path = make_phenotype_file(disease, output_dir)
-    make_grm_and_binaries(disease, pheno_path, output_dir)
+def main(disease, output_dir):
+    iid, mu = load_latents(output_dir, disease)
+    assert len(iid) == len(mu)
+    make_phenotype_file(disease, output_dir, iid)
+    make_grm_and_binaries(disease, output_dir, iid, mu)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='Build GRM and GCTA binaries from WTCCC VAE latent representations'
+        description="Build GRM, phenotype, and GCTA binaries from WTCCC VAE latent representations"
     )
-    parser.add_argument('--disease', type=str, required=True, help='Disease name (e.g. BD)')
-    parser.add_argument('--data_path', type=str, required=True, help='Path to the genotype CSV')
-    parser.add_argument('--output_dir', type=str, required=True, help='Directory to write outputs to')
+    parser.add_argument("--disease", type=str, required=True, help="Disease name (e.g. BD)")
+    parser.add_argument("--output_dir", type=str, required=True,
+                        help="Directory with {disease}_latent_representations.csv; outputs written here")
     args = parser.parse_args()
-    main(args.disease, args.data_path, args.output_dir)
+    main(args.disease, args.output_dir)
