@@ -1,11 +1,12 @@
 """
 Build phenotype files, GRM, and GCTA binaries from WTCCC VAE latent representations.
 
-Reads the latent means written by vae/train_wtccc.py, computes the genetic
-relationship matrix (GRM = (1/M) * E @ E.T), serializes it to GCTA binary
-format (.grm.bin, .grm.N.bin, .grm.id), and writes a case/control phenotype
-file (.phen). The output directory is ready for gcta.py or a direct GCTA
---reml call.
+Reads the latent means written by vae/train_wtccc.py, standardizes each latent
+dimension (column) to mean 0 / unit variance, computes the genetic relationship
+matrix (GRM = (1/d) * Z @ Z.T, d = number of latent dimensions), serializes it
+to GCTA binary format (.grm.bin, .grm.N.bin, .grm.id), and writes a case/control
+phenotype file (.phen). The output directory is ready for gcta.py or a direct
+GCTA --reml call.
 
 Example usage:
     python heritability/grm_wtccc.py --disease BD \\
@@ -43,9 +44,20 @@ def make_phenotype_file(disease, output_dir):
 
 
 def calculate_grm(E):
-    """Compute the GRM as (1/M) * E @ E.T where M is the number of latent dimensions."""
-    M = E.shape[1]
-    return (1 / M) * E @ E.T
+    """Compute the latent GRM.
+
+    Each latent dimension (column) is standardized to mean 0 and unit variance,
+    then GRM = (1/d) * Z @ Z.T, where d is the number of latent dimensions. This
+    yields a positive semi-definite matrix with diagonal ~= 1 -- the direct
+    analogue of a standardized-genotype GRM with features = latent dimensions.
+    """
+    mu_mean = E.mean(axis=0, keepdims=True)
+    mu_std = E.std(axis=0, keepdims=True)
+    mu_std[mu_std == 0] = 1.0  # guard against zero-variance (collapsed) latent dims
+    Z = (E - mu_mean) / mu_std
+
+    d = Z.shape[1]
+    return (1.0 / d) * Z @ Z.T
 
 
 def make_grm_and_binaries(disease, pheno_path, output_dir):
