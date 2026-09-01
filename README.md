@@ -1,22 +1,26 @@
 # HERL (Heritability Estimation by Representation Learning)
 
 Deep generative modelling and representation learning of high-dimensional 
-genotype data for heritability estimation.
+genotype data for heritability estimation using a categorical variational 
+autoencoder (VAE).
+
+![Python](https://img.shields.io/badge/python-3.9+-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
+
+## Background
 
 Standard genomic-heritability methods (e.g. GCTA-GREML) build a genetic 
 relationship matrix (GRM) directly from standardized SNP genotypes, which 
 is a strictly linear summary of relatedness. This project explores whether 
-a variational autoencoder (VAE) that compresses each individual's genotype 
-into a low-dimensional representation can provide input for a GRM that yields 
-improved heritability estimates. The latent representations should be able to 
-capture nonlinear structure (dominance, epistasis, population structure) that 
-a linear GRM cannot.
+a VAE that compresses each individual's genotype into a low-dimensional 
+representation can provide input for a GRM that yields improved heritability 
+estimates. The latent representations should be able to capture nonlinear 
+structure (dominance, epistasis, population structure) that a linear GRM 
+cannot.
 
 ![Method overview](assets/fig1.png)
 
----
-
-## Method
+## Method overview
 
 The pipeline has four core stages:
 
@@ -60,8 +64,8 @@ binary (`.npy`, tagged pruned/unpruned) for fast subsequent loads.
 
 A fully connected VAE encodes the imputed genotype tensor into a latent 
 distribution and reconstructs it. The encoder and decoder are symmetric 
-fully-connected stacks — `SNPs → 512 → 256 → 128` (latent) and 
-`128 → 256 → 512 → SNPs` — with batch normalization and ReLU activations.
+fully-connected stacks - `SNPs → 512 → 256 → 128` (latent) and 
+`128 → 256 → 512 → SNPs` - with batch normalization and ReLU activations.
 - **Continuous dosage input:** The encoder consumes the mean-imputed allele 
 dosages directly (one value per SNP) and maps them to the Gaussian posterior 
 parameters (`mu`, `log_var`).
@@ -94,8 +98,6 @@ Heritability is estimated by restricted maximum likelihood (GREML) with
 [GCTA](https://yanglab.westlake.edu.cn/software/gcta/) (`--reml`), reporting 
 `V(G)/Vp`. [LDAK](https://dougspeed.com/ldak/) is supported as an alternative.
 
----
-
 ## Reconstruction quality & determinism
 
 While the network optimizes a categorical cross-entropy likelihood, 
@@ -112,7 +114,9 @@ Training is monitored with reconstruction R² (variance explained by the
 expected dosage), the cross-entropy reconstruction error, and the separate 
 reconstruction / KL loss components.
 
----
+## Results
+
+TBD
 
 ## Repository layout
 
@@ -144,7 +148,6 @@ eda/            Analyze    — exploratory data analysis
 Datasets covered: **WTCCC** (seven case/control diseases: BD, CAD, CD, HT, RA, 
 T1D, T2D) and **GTEx** (gene-level / cis-eQTL).
 
----
 
 ## Usage
 
@@ -156,19 +159,19 @@ The stages are separate command-line scripts that share `--data_path` /
 #    [Optional: append --pruned to use LD-pruned SNPs]
 python vae/train_wtccc.py \
     --config vae/configs/wtccc.json --disease BD \
-    --data_path /work/long_lab/for_Ariel/BD \
-    --output_dir /work/long_lab/sasha/heritability/out/WTCCC/BD/BD_128
+    --data_path /path/to/wtccc/BD \
+    --output_dir /path/to/output/WTCCC/BD/BD_128
 
 # 2. Build the GRM (from the latents) + phenotype + GCTA binaries
 python heritability/grm_wtccc.py \
     --disease BD \
-    --output_dir /work/long_lab/sasha/heritability/out/WTCCC/BD/BD_128
+    --output_dir out/WTCCC/BD/BD_128
 
 # 3. Estimate heritability with GCTA (external tool)
 gcta64 --reml \
-    --grm-bin /work/long_lab/sasha/heritability/out/WTCCC/BD/BD_128/BD \
-    --pheno   /work/long_lab/sasha/heritability/out/WTCCC/BD/BD_128/BD.phen \
-    --out     /work/long_lab/sasha/heritability/out/WTCCC/BD/BD_128/BD_reml
+    --grm-bin out/WTCCC/BD/BD_128/BD \
+    --pheno   out/WTCCC/BD/BD_128/BD.phen \
+    --out     out/WTCCC/BD/BD_128/BD_reml
 ```
 
 Each training run writes, into `--output_dir`, the latent means 
@@ -184,7 +187,6 @@ Genotype input relies on prefix paths to raw PLINK binary triplets (`.bed`,
 `.bim`, `.fam`). WTCCC case/control status is inferred from the individual ID 
 prefix in the `.fam` file.
 
----
 
 ## Requirements
 
